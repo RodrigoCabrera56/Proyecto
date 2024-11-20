@@ -1,0 +1,93 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_NeoPixel.h>
+
+#define LM75_ADDR 0x48       // Dirección I2C del sensor LM75
+#define PIN_NEOPIXEL 32      // Pin del NeoPixel
+#define NUMPIXELS 8          // Número de LEDs en la tira NeoPixel
+#define SDA_PIN 21           // Pin SDA para I2C
+#define SCL_PIN 22           // Pin SCL para I2C
+#define BUTTON_PIN 15        // Botón para simular guardar datos
+
+// Inicialización del objeto NeoPixel
+Adafruit_NeoPixel pixels(NUMPIXELS, PIN_NEOPIXEL, NEO_GRB);
+
+// Declaración de funciones
+float readTemperature();  // Función para leer la temperatura del sensor
+void setNeoPixelColor(uint8_t r, uint8_t g, uint8_t b); // Cambiar color de todos los LEDs
+void updateState(const char* state); // Cambiar estado visual
+
+// Variable para el estado actual
+String currentState = "Encendido";
+
+void setup() {
+  Serial.begin(115200); // Inicialización del monitor serial
+  Wire.begin(SDA_PIN, SCL_PIN);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP); // Configuración del botón
+
+  pixels.begin();
+  updateState("Encendido"); // Estado inicial
+  delay(1000);
+}
+
+void loop() {
+  // Estado: Midiendo
+  updateState("Midiendo");
+  float temperature = readTemperature();
+
+  if (temperature != -99.0) {
+    Serial.print("Temperatura actual: ");
+    Serial.print(temperature);
+    Serial.println(" °C");
+  } else {
+    Serial.println("Error leyendo el sensor de temperatura");
+  }
+
+  // Simular guardar datos al presionar el botón
+  if (digitalRead(BUTTON_PIN) == LOW) {
+    updateState("Guardando");
+    delay(2000); // Simula tiempo para guardar datos
+    updateState("Midiendo");
+  }
+
+  delay(1000); // Retardo para evitar saturar el ciclo
+}
+
+float readTemperature() {
+  Wire.beginTransmission(LM75_ADDR);
+  Wire.write(0x00);
+  if (Wire.endTransmission() != 0) {
+    Serial.println("Error: No se pudo comunicar con el sensor");
+    return -99.0; 
+  }
+
+  Wire.requestFrom(LM75_ADDR, 2);
+  if (Wire.available() == 2) {
+    int tempRaw = (Wire.read() << 8) | Wire.read();
+    return tempRaw / 256.0;
+  } else {
+    Serial.println("Error: Datos incompletos del sensor");
+    return -99.0;
+  }
+}
+
+void setNeoPixelColor(uint8_t r, uint8_t g, uint8_t b) {
+  for (int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(r, g, b));
+  }
+  pixels.show();
+}
+
+void updateState(const char* state) {
+  currentState = state;
+  if (strcmp(state, "Encendido") == 0) {
+    setNeoPixelColor(0, 255, 0); // Verde: encendido
+  } else if (strcmp(state, "Midiendo") == 0) {
+    setNeoPixelColor(0, 0, 255); // Azul: midiendo
+  } else if (strcmp(state, "Guardando") == 0) {
+    setNeoPixelColor(255, 255, 0); // Amarillo: guardando
+  }
+  Serial.print("Estado actual: ");
+  Serial.println(state);
+}
